@@ -6,6 +6,10 @@ import zipfile
 import gzip
 import json
 
+# python build.py platform=googleplay directory=/path/to/dir
+# python build.py platform=ios directory=/path/to/dir sku_map_file=sku_map.json
+
+
 ds = "/"
 if (sys.platform == "win32"):
 	ds = "\\"
@@ -101,7 +105,7 @@ def getBalanceForCurrency(summaryfile, currency):
 	print "Could not find balance currency " + currency + " in file " + summaryfile
 	exit(0)
 
-def findIOSExchangeRateForCurrency(summaryfile, currency):
+def findIOSExchangeRateForCurrency(summaryfile, currency, carryIfNotFound=True):
 	exchangeRateIndex = 8
 	if (doesBalanceColumnExistInSummary(summaryfile)):
 		exchangeRateIndex += 1
@@ -112,12 +116,18 @@ def findIOSExchangeRateForCurrency(summaryfile, currency):
 		for row in filereader:
 			if i > 2 and row[0] is not '':
 
+				#print len(row)
 				if len(row) < 11:
+					print 'Balance carried forward ' + currency + " - " +(summaryfile)
+					return [ True, 1.0 ]
+
+				if ((row[exchangeRateIndex] == "" or row[exchangeRateIndex] == "GBP") and carryIfNotFound):
 					print 'Balance carried forward ' + currency + " - " +(summaryfile)
 					return [ True, 1.0 ]
 
 				region = row[0]
 				rowcurrency = region[len(region)-4:len(region)-1]
+				#print rowcurrency + "-" + region + "-" + currency;
 				if currency == rowcurrency:
 					return [ False, row[exchangeRateIndex] ]
 			i += 1
@@ -287,15 +297,19 @@ if __name__ == "__main__":
 				os.makedirs(outfolder)
 				unzip(directory + ds + file, outfolder)
 
-			month = 0
-			year = 0
+			year = file[0:file.find('-')];
+			month = file[file.find('-')+1:file.find('-',file.find('-')+1)];
+
+			#print file;
+			#print month;
+			print '---' + month + "/" + year;
 
 			#
 			# for each region
 			#
 			regionfiles = filter(lambda x: get_str_extension(x) == "gz", listFiles(outfolder))
 			for regionfile in regionfiles:
-				#print regionfile
+				print regionfile
 				gzfile = gzip.open(regionfile, 'rb')
 				tsv = gzfile.read()
 				gzfile.close()
@@ -336,15 +350,20 @@ if __name__ == "__main__":
 							exchangeratedata = findIOSExchangeRateForCurrency(summaryfile, regioncurrency)
 							if (exchangeratedata[0] == True):
 								# balance carried forward
-								#print 'balance ' + str(amountInBuyersCurrency) + " " + regioncurrency + ' carried forward for app ' + skuname
-								#print balanceCarriedForward
+								print 'balance ' + str(amountInBuyersCurrency) + " " + regioncurrency + ' carried forward for app ' + skuname
+								print balanceCarriedForward
 								if skuname not in balanceCarriedForward:
 									balanceCarriedForward[skuname] = {}
 								if str(regioncurrency) not in balanceCarriedForward[skuname]:
 									balanceCarriedForward[skuname][regioncurrency] = 0.0
 								balanceCarriedForward[skuname][regioncurrency] += amountInBuyersCurrency
 							else:
-								exchangerate = float(exchangeratedata[1])
+								#print ":" + exchangeratedata[1];
+								try:
+									exchangerate = float(exchangeratedata[1]);
+								except: 
+									print 'could not find exchange rate for ' + skuname + ' ' + regioncurrency;
+									exit(0);
 								apps[skuname] += amountInBuyersCurrency * exchangerate
 
 						i += 1
@@ -364,10 +383,15 @@ if __name__ == "__main__":
 
 
 			# check carried forward balance
+			#print('hello');
+			#print(balanceCarriedForward);
 			if doesBalanceColumnExistInSummary(summaryfile) and balanceCarriedForward:
+
+				removeappids = [];
 				for appid in balanceCarriedForward:
 					#print appid
 					#print balanceCarriedForward[appid]
+					removecurrencies = [];
 					for balcurrency in balanceCarriedForward[appid]:
 						exchangeratedata = findIOSExchangeRateForCurrency(summaryfile, balcurrency)
 						#print exchangeratedata
@@ -375,11 +399,33 @@ if __name__ == "__main__":
 							amountInBuyersCurrency = balanceCarriedForward[appid][balcurrency]
 							skuname = sku_map[ appid ] if appid in sku_map else appid
 							#print ('----')
-							#print skuname
+							#print skuname + "-" + balcurrency;
+							#print amountInBuyersCurrency;
 							#print apps
+							if not skuname in apps:
+								apps[skuname] = 0;
 							apps[skuname] += amountInBuyersCurrency * float(exchangeratedata[1])
-				balanceCarriedForward = {}
-				#print balanceCarriedForward
+							#balanceCarriedForward[appid].pop(balcurrency);
+							removecurrencies.extend([balcurrency]);
+
+					# remove done currencies.
+					for rc in removecurrencies:
+						#print 'removing ' + appid + ' currency ' + rc;
+						balanceCarriedForward[appid].pop(rc);
+						#print balanceCarriedForward;
+
+					if len(balanceCarriedForward[appid]) == 0:
+						removeappids.extend([appid]);
+
+				# remove done appids
+				for ra in removeappids:
+					#print 'removing ' + ra;
+					balanceCarriedForward.pop(ra);
+					#print balanceCarriedForward;
+
+				#balanceCarriedForward = {}
+				#print('balanced cleared hello ');
+				print balanceCarriedForward
 
 			monthForApps(apps)
 
