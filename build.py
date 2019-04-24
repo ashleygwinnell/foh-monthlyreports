@@ -8,7 +8,7 @@ import json
 
 # python build.py platform=googleplay directory=/path/to/dir
 # python build.py platform=ios directory=/path/to/dir sku_map_file=sku_map.json
-
+# python build.py platform=nintendo directory=/path/to/dir
 
 ds = "/"
 if (sys.platform == "win32"):
@@ -166,13 +166,13 @@ def monthForApps(a):
 	global mytable
 
 	monthtotal = 0
-	for app in apps:
-		monthtotal += apps[app]
-		markdownTable += "| " + year + " | " + app + " | " + str(apps[app]) + " |" + nl
-		mytable += formatTuple3( calendar.month_name[int(month)][0:3] + " " + year + " ", 12, app, 36, round(apps[app], 2), 12)  + nl
+	for app in a:
+		monthtotal += a[app]
+		markdownTable += "| " + year + " | " + app + " | " + str(a[app]) + " |" + nl
+		mytable += formatTuple3( calendar.month_name[int(month)][0:3] + " " + year + " ", 12, app, 36, "{:0.2f}".format(a[app]), 12)  + nl
 
 	markdownTable += "| " + year + " | total | " + str(monthtotal) + " |" + nl
-	mytable += formatTuple3( calendar.month_name[int(month)][0:3] + " " + year + " ", 12, "total", 36, round(monthtotal, 2), 12)  + nl
+	mytable += formatTuple3( calendar.month_name[int(month)][0:3] + " " + year + " ", 12, "total", 36, "{:0.2f}".format(monthtotal), 12)  + nl
 
 	markdownTable += "---" + nl
 	mytable += "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -" + nl
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 	print "directory: " + directory
 	print "platform: " + platform
 
-	ignoreFiles = set(['.DS_Store', 'build.py'])
+	ignoreFiles = set(['.DS_Store', 'build.py', '.pdf'])
 	files = filter(lambda x: x not in ignoreFiles, listFiles(directory, False))
 
 	if (platform == "android" or platform == "googleplay"):
@@ -259,6 +259,57 @@ if __name__ == "__main__":
 
 				monthForApps(apps)
 
+	elif (platform == "nintendo" or platform == "switch"):
+		nl = "\n"
+		markdownTable += "| MONTH 	| APP 	| INCOME	|" + nl
+		markdownTable += "|---		|---	|---:		|" + nl
+
+		mytable += "-------------------------------------------------------------" + nl
+		mytable += "| NINTENDO SALES                                            |" + nl
+		mytable += "| MONTH     | APP                               | INCOME    |" + nl
+		mytable += "-------------------------------------------------------------" + nl
+
+		appsTotals = {}
+
+		csvfiles = filter(lambda x: get_str_extension(x) == "csv", files)
+		csvfiles.sort();
+		for monthFile in csvfiles:
+			l = len(monthFile);
+			month = monthFile[l-6:l-4]
+			year = monthFile[l-10:l-6];
+			#print monthFile;
+			#print month, year;
+			if (month[0:1] == "0"):
+				month = month[1:2];
+
+			apps = {}
+			gameColumn = 1;
+			paymentCurrencyColumn = 24; #len(row) - 2
+
+			with open(directory + ds + monthFile, 'rb') as csvfile:
+				filereader = csv.reader(csvfile, delimiter=',', quotechar='"')
+				i = 0;
+				for row in filereader:
+
+					if ( i > 0 ): #first row is column title
+						print row[gameColumn];
+						print row[paymentCurrencyColumn];
+
+						if (row[gameColumn] not in apps):
+							apps[row[gameColumn]] = 0
+						if (row[gameColumn] not in appsTotals):
+							appsTotals[row[gameColumn]] = 0
+
+						apps[row[gameColumn]] += float(row[paymentCurrencyColumn])
+						appsTotals[row[gameColumn]] += float(row[paymentCurrencyColumn])
+					i += 1;
+
+				monthForApps(apps)
+			pass;
+
+		month = "00"
+		year = "  total"
+		monthForApps(appsTotals);
 
 	elif (platform == "ios" or platform == "appstore"):
 
@@ -361,7 +412,7 @@ if __name__ == "__main__":
 								#print ":" + exchangeratedata[1];
 								try:
 									exchangerate = float(exchangeratedata[1]);
-								except: 
+								except:
 									print 'could not find exchange rate for ' + skuname + ' ' + regioncurrency;
 									exit(0);
 								apps[skuname] += amountInBuyersCurrency * exchangerate
