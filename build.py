@@ -9,6 +9,8 @@ import json
 # python build.py platform=googleplay directory=/path/to/dir
 # python build.py platform=ios directory=/path/to/dir sku_map_file=sku_map.json
 # python build.py platform=nintendo directory=/path/to/dir
+# python build.py platform=nintendo directory=~/Dropbox/Force\ Of\ Habit\ New/Company/Documents/Accounting/Sales\ Income/Nintendo
+
 
 ds = "/"
 if (sys.platform == "win32"):
@@ -208,7 +210,7 @@ if __name__ == "__main__":
 		elif parts[0] == "sku_map":
 			# e.g. python build.py platform=ios sku_map='{"tipjar.small":"makenines","tipjar.medium":"makenines","tipjar.large":"makenines"}' directory=~/AppStore/
 			sku_map = json.loads(parts[1])
-		elif parts[0] == "sku_map_file":
+		elif parts[0] == "sku_map_file" and parts[1] != "":
 			f = open(parts[1])
 			fcontents = f.read()
 			f.close()
@@ -238,6 +240,8 @@ if __name__ == "__main__":
 
 		packageNameIndex = 7	# H column
 		amountIndex = 18		# S column
+
+		files.sort();
 
 		for monthFile in files:
 
@@ -309,6 +313,7 @@ if __name__ == "__main__":
 
 		month = "00"
 		year = "  total"
+		print appsTotals;
 		monthForApps(appsTotals);
 
 	elif (platform == "ios" or platform == "appstore"):
@@ -336,6 +341,8 @@ if __name__ == "__main__":
 		#
 		# for each month
 		#
+		zipfiles.sort();
+		csvfiles.sort();
 		for file in zipfiles:
 
 			apps = {}
@@ -359,6 +366,7 @@ if __name__ == "__main__":
 			# for each region
 			#
 			regionfiles = filter(lambda x: get_str_extension(x) == "gz", listFiles(outfolder))
+			regionfiles.sort();
 			for regionfile in regionfiles:
 				print regionfile
 				gzfile = gzip.open(regionfile, 'rb')
@@ -369,6 +377,10 @@ if __name__ == "__main__":
 				f = open(tsvname, "w")
 				f.write(tsv)
 				f.close()
+
+			regiontxtfiles = filter(lambda x: get_str_extension(x) == "txt", listFiles(outfolder))
+			regiontxtfiles.sort();
+			for tsvname in regiontxtfiles:
 
 				month = tsvname[tsvname.find("_")+1:tsvname.find("_")+3]
 				year = tsvname[tsvname.find("_")+3:tsvname.find("_")+5]
@@ -382,11 +394,20 @@ if __name__ == "__main__":
 				with open(tsvname, 'rb') as tsvfile:
 					i = 0
 					#print regionfile
+					ended = False;
 					regioncurrency = ''
 					filereader = csv.reader(tsvfile, delimiter='\t')
 					for row in filereader:
-						if i > 0 and len(row) > 2:
+						if row[0] == "Total_Rows" or row[0] == "Total_Units" or row[0] == "Total_Amount":
+							#print("break");
+							break;
+						if i > 0 and len(row) > 2 and not ended:
 							#print row#[vendorIdentifierIndex]
+							#print vendorIdentifierIndex
+							#print row
+							#print row[0]
+
+							#print row[vendorIdentifierIndex]
 
 							skuname = sku_map[ row[vendorIdentifierIndex] ] if row[vendorIdentifierIndex] in sku_map else row[vendorIdentifierIndex]
 							if (skuname not in apps):
